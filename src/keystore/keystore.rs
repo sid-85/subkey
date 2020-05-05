@@ -4,7 +4,6 @@ use super::json::Password;
 use super::json::Random;
 use super::json::Version;
 use super::keyfile::KeyFile;
-use bip39::{Language, Mnemonic, MnemonicType};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::str;
@@ -94,10 +93,46 @@ impl KeyStore {
             keys_dir_path: keys_dir_path.unwrap_or(".keys").to_string(),
         }
     }
-    // generate
-    // import
-    // sign
-    // verfiy
+
+    fn pair_to_key(
+        phrase: &str,
+        password: Option<&str>,
+        curve_type: Option<CryptoTypeId>,
+        address_format: Option<Ss58AddressFormat>,
+    ) -> Result<KeyFile> {
+        let curve_type = curve_type.unwrap_or(ed25519::CRYPTO_ID);
+
+        let (pair, _seed) = <Ed25519 as Crypto>::Pair::from_phrase(phrase, None)
+            .map_err(|e| Error::KeyStore(format!("Invalid phrase : {:?}", e)))?;
+
+        let address_formt = address_format.unwrap_or_default();
+
+        let address = pair.public().to_ss58check_with_version(address_formt);
+
+        let id: [u8; 16] = Random::random();
+
+        let v = Version::V3;
+
+        let password = Password::from(password.unwrap_or(""));
+        let crypto = JCrypto::encrypt(phrase.as_bytes(), &password)
+            .map_err(|e| Error::KeyStore(format!("Invalid encrypt : {:?}", e)))?;
+
+        let efvk = None;
+        // if let Ss58AddressFormat::Shielded == address_format {
+        // // TODO
+        // }
+
+        let key = KeyFile {
+            id: From::from(id),
+            version: v,
+            address: address.clone(),
+            curve: str::from_utf8(&curve_type.0[..]).unwrap().to_string(),
+            crypto: crypto,
+            efvk: efvk,
+            meta: None,
+        };
+        Ok(key)
+    }
     fn save_to_file(&self, name: &str, key: &KeyFile) -> Result<()> {
         let file_name = format!("{}/{}.json", self.keys_dir_path, name);
         let mut file = File::create(file_name)
@@ -122,21 +157,16 @@ impl KeyStore {
         password: Option<&str>,
         curve_type: Option<CryptoTypeId>,
         address_format: Option<Ss58AddressFormat>,
-        words: Option<usize>,
     ) -> Result<String> {
         // generate random keypair
-        let words = words.unwrap_or(12);
-        let mnemonic_type = MnemonicType::for_word_count(words).map_err(|e| {
-            Error::KeyStore(format!(
-                "Invalid number of words given for phrase: must be 12/15/18/21/24 : {}",
-                e
-            ))
-        })?;
-        let mnemonic = Mnemonic::new(mnemonic_type, Language::English);
-        let phrase = mnemonic.phrase();
+        let (_pair, phrase, _seed) = <Ed25519 as Crypto>::Pair::generate_with_phrase(None);
+        // key
+        let key = Self::pair_to_key(&phrase, password, curve_type, address_format)?;
 
         // save
-        self.import_new_address(name, password, curve_type, address_format, phrase)
+        let name = name.unwrap_or(&key.address);
+        self.save_to_file(name, &key)?;
+        Ok(name.to_string())
     }
 
     pub fn import_new_address(
@@ -147,41 +177,9 @@ impl KeyStore {
         address_format: Option<Ss58AddressFormat>,
         phrase: &str,
     ) -> Result<String> {
-        let curve_type = curve_type.unwrap_or(ed25519::CRYPTO_ID);
+        let key = Self::pair_to_key(phrase, password, curve_type, address_format)?;
 
-        // TODO
-        let (pair, _) = <Ed25519 as Crypto>::Pair::from_phrase(phrase, password)
-            .map_err(|e| Error::KeyStore(format!("Invalid phrase : {:?}", e)))?;
-
-        let address_formt = address_format.unwrap_or_default();
-
-        let address = pair.public().to_ss58check_with_version(address_formt);
-
-        let name = name.unwrap_or(&address);
-
-        let id: [u8; 16] = Random::random();
-
-        let v = Version::V3;
-
-        let password = Password::from(password.unwrap_or(""));
-        let crypto = JCrypto::encrypt(phrase.as_bytes(), &password)
-            .map_err(|e| Error::KeyStore(format!("Invalid encrypt : {:?}", e)))?;
-
-        let efvk = None;
-        // if let Ss58AddressFormat::Shielded == address_format {
-        // // TODO
-        // }
-
-        let key = KeyFile {
-            id: From::from(id),
-            version: v,
-            address: address.clone(),
-            curve: str::from_utf8(&curve_type.0[..]).unwrap().to_string(),
-            crypto: crypto,
-            efvk: efvk,
-            meta: None,
-        };
-
+        let name = name.unwrap_or(&key.address);
         self.save_to_file(name, &key)?;
         Ok(name.to_string())
     }
@@ -196,17 +194,60 @@ impl KeyStore {
             .map_err(|e| Error::KeyStore(format!("Invalid password : {}", e)))?;
 
         let phrase = String::from_utf8(secret)
-            .map_err(|e| Error::KeyStore(format!("Convert secret : {}", e)))?;
+            .map_err(|e| Error::KeyStore(format!("Convert phrase : {}", e)))?;
 
-        // let seed = Mnemonic::from_phrase(phrase, lang: Language)
+        let (_pair, seed) = <Ed25519 as Crypto>::Pair::from_phrase(&phrase, None)
+            .map_err(|e| Error::KeyStore(format!("Invalid phrase : {:?}", e)))?;
+
+        let (pubkey, _format) =
+            <<Ed25519 as Crypto>::Pair as Pair>::Public::from_ss58check_with_version(&key.address)
+                .map_err(|e| Error::KeyStore(format!("Convert pubkey : {:?}", e)))?;
+
+        assert_eq!(
+            _pair.public().to_ss58check_with_version(_format),
+            key.address.clone()
+        );
 
         Ok(Account {
             secret_phrase: phrase.clone(),
-            secret_seed: "".to_string(),
-            public_key: "".to_string(),
+            secret_seed: format_seed::<Ed25519>(seed),
+            public_key: format_public_key::<Ed25519>(pubkey),
             ss58_address: key.address.clone(),
             name: name.to_string(),
         })
+    }
+
+    pub fn sign_message(&self, name: &str, password: Option<&str>, msg: &str) -> Result<String> {
+        let key = self.load_from_file(name)?;
+        let password = Password::from(password.unwrap_or("").to_string());
+        let secret = key
+            .crypto
+            .decrypt(&password)
+            .map_err(|e| Error::KeyStore(format!("Invalid password : {}", e)))?;
+
+        let phrase = String::from_utf8(secret)
+            .map_err(|e| Error::KeyStore(format!("Convert phrase : {}", e)))?;
+
+        let (pair, _seed) = <Ed25519 as Crypto>::Pair::from_phrase(&phrase, None)
+            .map_err(|e| Error::KeyStore(format!("Invalid phrase : {:?}", e)))?;
+
+        let signature = pair.sign(msg.as_bytes());
+        Ok(serde_json::to_string(&signature).unwrap())
+    }
+
+    pub fn verfiy_message(&self, name: &str, msg: &str, signature: &str) -> Result<bool> {
+        let key = self.load_from_file(name)?;
+
+        let (pubkey, _format) =
+            <<Ed25519 as Crypto>::Pair as Pair>::Public::from_ss58check_with_version(&key.address)
+                .map_err(|e| Error::KeyStore(format!("Convert pubkey : {:?}", e)))?;
+
+        let signature: <<Ed25519 as Crypto>::Pair as Pair>::Signature =
+            serde_json::from_str(signature)
+                .map_err(|e| Error::KeyStore(format!("Invalid signature : {:?}", e)))?;
+
+        let ret = <<Ed25519 as Crypto>::Pair as Pair>::verify(&signature, msg, &pubkey);
+        Ok(ret)
     }
 }
 
@@ -216,22 +257,35 @@ mod test {
     #[test]
     fn get_new_address() {
         let ks = KeyStore::new(None);
-        let ret = ks.get_new_address(None, None, None, None, None);
+        let ret = ks.get_new_address(None, None, None, None);
         println!("===={:?}", ret);
+        assert!(ret.is_ok());
     }
 
     #[test]
-    fn import_new_address() {
-        let phrase = "romance bus jealous account when lunch crush clinic ugly text shrug waste";
+    fn import_export() {
         let ks = KeyStore::new(None);
+
+        let phrase = "romance bus jealous account when lunch crush clinic ugly text shrug waste";
         let ret = ks.import_new_address(Some("sss"), None, None, None, phrase);
         println!("===={:?}", ret);
+        assert!(ret.is_ok());
+
+        let ret = ks.export_address("sss", None);
+        println!("===={:?}", ret);
+        assert!(ret.is_ok());
     }
 
     #[test]
-    fn export_address() {
+    fn sign_verfiy() {
         let ks = KeyStore::new(None);
-        let ret = ks.export_address("sss", None);
+
+        let ret = ks.sign_message("sss", None, "message");
         println!("===={:?}", ret);
+        assert!(ret.is_ok());
+
+        let ret = ks.verfiy_message("sss", "message", &ret.unwrap());
+        println!("===={:?}", ret);
+        assert!(ret.is_ok());
     }
 }
