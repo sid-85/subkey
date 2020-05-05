@@ -95,7 +95,7 @@ pub trait Crypto: Sized {
         }
     }
 }
-
+pub type PairOf<C> = <C as Crypto>::Pair;
 pub type SignatureOf<C> = <<C as Crypto>::Pair as Pair>::Signature;
 pub type PublicOf<C> = <<C as Crypto>::Pair as Pair>::Public;
 pub type SeedOf<C> = <<C as Crypto>::Pair as Pair>::Seed;
