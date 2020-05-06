@@ -1,0 +1,125 @@
+name: keys
+version: "0.1.0"
+author: xuketech
+about: Control your wallet
+args:
+  - url:
+      short: u
+      long: url
+      help: Node JSON-RPC endpoint, default "http:://localhost:9933"
+      takes_value: true
+subcommands:
+  - gen:
+      version: "0.1.0"
+      about: Generate a random account
+      args:
+        - ed25519:
+            short: e
+            long: ed25519
+            help: Use Ed25519/BIP39 cryptography (Default)
+        - secp256k1:
+            short: k
+            long: secp256k1
+            help: Use SECP256k1/ECDSA/BIP39 cryptography
+        - sr25519:
+            short: s
+            long: sr25519
+            help: Use Schnorr/Ristretto x25519/BIP39 cryptography
+        - t:
+            short: t
+            long: transparent
+            help: Generate transparent payment address (Default)
+        - v:
+            short: v
+            long: shielded
+            help: Generate shielded payment address
+        - name:
+            help: account name
+            takes_value: true
+        - password:
+            help: account password
+            takes_value: true
+  - import:
+      version: "0.1.0"
+      about: Insert an account
+      args:
+        - ed25519:
+            short: e
+            long: ed25519
+            help: Use Ed25519/BIP39 cryptography (Default)
+        - secp256k1:
+            short: k
+            long: secp256k1
+            help: Use SECP256k1/ECDSA/BIP39 cryptography
+        - sr25519:
+            short: s
+            long: sr25519
+            help: Use Schnorr/Ristretto x25519/BIP39 cryptography
+        - t:
+            short: t
+            long: transparent
+            help: Generate transparent payment address (Default)
+        - v:
+            short: v
+            long: shielded
+            help: Generate shielded payment address
+        - phrase:
+            help: BIP39's phrase of the secret key
+            required: true
+            takes_value: true
+        - name:
+            help: account name
+            takes_value: true
+        - password:
+            help: account password
+            takes_value: true
+  - export:
+      version: "0.1.0"
+      about: Insert an account
+      args:
+        - name:
+            help: account name
+            required: true
+            takes_value: true
+        - password:
+            help: account password
+            takes_value: true
+  - sign:
+      version: "0.1.0"
+      about: Sign a message
+      args:
+        - name:
+            help: account name
+            required: true
+            takes_value: true
+        - message:
+            help: message content
+            required: true
+            takes_value: true
+        - password:
+            help: account password
+            takes_value: true
+  - verify:
+      version: "0.1.0"
+      about: Verify a signature for a message
+      args:
+        - name:
+            help: account name
+            required: true
+            takes_value: true
+        - message:
+            help: message content
+            required: true
+            takes_value: true
+        - signature:
+            help: signature content
+            required: true
+            takes_value: true
+        - password:
+            help: account password
+            takes_value: true
+
+    #   -e, --ed25519 'Use Ed25519/BIP39 cryptography'
+    #   -k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
+    #   -s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
+    #   [format] -f, --format <format> 'Specify a address format. One of {}. Default is {}'

@@ -10,7 +10,7 @@ edition = "2018"
 rustc-hex = "1.0"
 derive_more = { version = "0.99.2" }
 rpassword = "4.0.1"
-clap = "2.33.0"
+clap = {version = "2.33.0", features = ["yaml"]}
 hex = "0.4.2"
 hex-literal = "0.2.1"
 rand = "0.7.3"
