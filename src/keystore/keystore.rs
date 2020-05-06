@@ -235,7 +235,7 @@ impl KeyStore {
         Ok(serde_json::to_string(&signature).unwrap())
     }
 
-    pub fn verfiy_message(&self, name: &str, msg: &str, signature: &str) -> Result<bool> {
+    pub fn verify_message(&self, name: &str, msg: &str, signature: &str) -> Result<bool> {
         let key = self.load_from_file(name)?;
 
         let (pubkey, _format) =
@@ -284,7 +284,7 @@ mod test {
         println!("===={:?}", ret);
         assert!(ret.is_ok());
 
-        let ret = ks.verfiy_message("sss", "message", &ret.unwrap());
+        let ret = ks.verify_message("sss", "message", &ret.unwrap());
         println!("===={:?}", ret);
         assert!(ret.is_ok());
     }
