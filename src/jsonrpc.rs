@@ -2,11 +2,14 @@ use jsonrpc_http_server::jsonrpc_core::{Error, IoHandler, Params};
 use jsonrpc_http_server::ServerBuilder;
 
 use super::keystore::KeyStore;
+use super::types::*;
 use std::sync::Arc;
 use std::sync::RwLock;
 
+pub static ADDR: &str = "127.0.0.1:9933";
+
 pub fn run(address: Option<&str>) {
-    let address = address.unwrap_or("127.0.0.1:3030");
+    let address = address.unwrap_or(ADDR);
 
     let server = ServerBuilder::new(rpc_handler())
         .threads(3)
@@ -83,43 +86,4 @@ pub fn rpc_handler() -> IoHandler {
     });
 
     io
-}
-
-use serde::Deserialize;
-
-#[derive(Deserialize)]
-pub struct AddParams {
-    name: Option<String>,
-    password: Option<String>,
-    curve_type: Option<String>,
-    address_format: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct ImportParams {
-    phrase: String,
-    name: Option<String>,
-    password: Option<String>,
-    curve_type: Option<String>,
-    address_format: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct ExportParams {
-    name: String,
-    password: Option<String>,
-}
-
-#[derive(Deserialize)]
-pub struct SignMessageParams {
-    name: String,
-    password: Option<String>,
-    message: String,
-}
-
-#[derive(Deserialize)]
-pub struct VerfiyMessageParams {
-    name: String,
-    message: String,
-    signature: String,
 }

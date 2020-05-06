@@ -372,6 +372,15 @@ pub trait CryptoType {
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct CryptoTypeId(pub [u8; 4]);
 
+impl From<CryptoTypeId> for String {
+    fn from(x: CryptoTypeId) -> String {
+        match str::from_utf8(&x.0[..]) {
+            Ok(id) => id.to_string(),
+            Err(_) => format!("{:#?}", x.0),
+        }
+    }
+}
+
 /// A type alias of CryptoTypeId & a public key
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct CryptoTypePublicPair(pub CryptoTypeId, pub Vec<u8>);

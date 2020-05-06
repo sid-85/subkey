@@ -17,7 +17,7 @@ fn get_usage() -> String {
         "
 		-e, --ed25519 'Use Ed25519/BIP39 cryptography'
 		-k, --secp256k1 'Use SECP256k1/ECDSA/BIP39 cryptography'
-		-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography'
+		-s, --sr25519 'Use Schnorr/Ristretto x25519/BIP39 cryptography (Default)'
 		[format] -f, --format <format> 'Specify a address format. One of {}. Default is {}'
 		[password] -p, --password <password> 'The password for the key'
 		--password-interactive 'You will be prompted for the password for the key.'
