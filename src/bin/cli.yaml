@@ -125,3 +125,66 @@ subcommands:
             long: password
             help: account password
             takes_value: true
+  - accounts:
+      version: "0.1.0"
+      about: all the account names
+  - address:
+      version: "0.1.0"
+      about: address of the account name
+      args:
+        - name:
+            help: account name
+            required: true
+            takes_value: true
+  - account:
+      version: "0.1.0"
+      about: account name of the address
+      args:
+        - addr:
+            help: account address
+            required: true
+            takes_value: true
+  - remove:
+      version: "0.1.0"
+      about: remove account name
+      args:
+        - name:
+            help: account name
+            required: true
+            takes_value: true
+        - password:
+            long: password
+            help: account password
+            takes_value: true
+  - rename:
+      version: "0.1.0"
+      about: rename account name
+      args:
+        - name:
+            help: account name
+            required: true
+            takes_value: true
+        - new_name:
+            help: account name
+            required: true
+            takes_value: true
+        - password:
+            long: password
+            help: account password
+            takes_value: true
+  - password:
+      version: "0.1.0"
+      about: modify password of account name
+      args:
+        - name:
+            help: account name
+            required: true
+            takes_value: true
+        - password:
+            help: old password
+            required: true
+            takes_value: true
+        - new_password:
+            help: new password
+            required: true
+            takes_value: true

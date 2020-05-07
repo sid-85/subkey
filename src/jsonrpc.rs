@@ -102,5 +102,74 @@ pub fn rpc_handler() -> IoHandler {
         Ok(serde_json::json!(ret))
     });
 
+    let ks_accounts = ks.clone();
+    io.add_method("accounts", move |_params: Params| {
+        let ret = &ks_accounts
+            .read()
+            .unwrap()
+            .accounts()
+            .map_err(|e| Error::invalid_params_with_details("exec error", e))?;
+        Ok(serde_json::json!(ret))
+    });
+
+    let ks_get_account_address = ks.clone();
+    io.add_method("get_account_address", move |params: Params| {
+        let param: AccountAddressParams = params.parse()?;
+        let ret = &ks_get_account_address
+            .read()
+            .unwrap()
+            .get_account_address(&param.name)
+            .map_err(|e| Error::invalid_params_with_details("exec error", e))?;
+        Ok(serde_json::json!(ret))
+    });
+
+    let ks_get_account = ks.clone();
+    io.add_method("get_account", move |params: Params| {
+        let param: AccountParams = params.parse()?;
+        let ret = &ks_get_account
+            .read()
+            .unwrap()
+            .get_account(&param.addr)
+            .map_err(|e| Error::invalid_params_with_details("exec error", e))?;
+        Ok(serde_json::json!(ret))
+    });
+
+    let ks_remove_account = ks.clone();
+    io.add_method("remove_account", move |params: Params| {
+        let param: AccountRemoveParams = params.parse()?;
+        let password: Option<&str> = param.password.as_ref().map(String::as_str);
+        let ret = &ks_remove_account
+            .read()
+            .unwrap()
+            .remove_account(&param.name, password)
+            .map_err(|e| Error::invalid_params_with_details("exec error", e))?;
+        Ok(serde_json::json!(ret))
+    });
+
+    let ks_change_name = ks.clone();
+    io.add_method("change_name", move |params: Params| {
+        let param: AccountNameChangeParams = params.parse()?;
+        let password: Option<&str> = param.password.as_ref().map(String::as_str);
+        let ret = &ks_change_name
+            .read()
+            .unwrap()
+            .change_name(&param.name, &param.new_name, password)
+            .map_err(|e| Error::invalid_params_with_details("exec error", e))?;
+        Ok(serde_json::json!(ret))
+    });
+
+    let ks_change_password = ks.clone();
+    io.add_method("change_password", move |params: Params| {
+        let param: AccountPasswordChangeParams = params.parse()?;
+        let password: Option<&str> = param.password.as_ref().map(String::as_str);
+        let new_password: Option<&str> = param.new_password.as_ref().map(String::as_str);
+        let ret = &ks_change_password
+            .read()
+            .unwrap()
+            .change_password(&param.name, password, new_password)
+            .map_err(|e| Error::invalid_params_with_details("exec error", e))?;
+        Ok(serde_json::json!(ret))
+    });
+
     io
 }

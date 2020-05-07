@@ -7,7 +7,9 @@ use super::keyfile::KeyFile;
 use bip39::{Language, Mnemonic, MnemonicType};
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use std::fs;
 use std::fs::File;
+use std::path::Path;
 use std::str;
 
 // trait IKeyStore {
@@ -91,13 +93,45 @@ pub struct KeyStore {
 
 impl KeyStore {
     pub fn new(keys_dir_path: Option<&str>) -> Self {
+        let keys_dir_path = keys_dir_path.unwrap_or(".keys").to_string();
+        if !Path::new(&keys_dir_path).exists() {
+            fs::create_dir_all(&keys_dir_path)
+                .expect(&format!("keystore create_dir_all {}", keys_dir_path));
+        }
+
         KeyStore {
-            keys_dir_path: keys_dir_path.unwrap_or(".keys").to_string(),
+            keys_dir_path: keys_dir_path,
         }
     }
 
+    fn filename(&self, name: &str) -> String {
+        format!("{}/{}.json", self.keys_dir_path, name)
+    }
+
+    fn should_exist(&self, name: &str) -> Result<bool> {
+        let file_name = self.filename(name);
+        if !Path::new(&file_name).exists() {
+            return Err(Error::KeyStore(format!(
+                "account name {} alreay exist",
+                name
+            )));
+        }
+        Ok(true)
+    }
+
+    fn should_not_exist(&self, name: &str) -> Result<bool> {
+        let file_name = self.filename(name);
+        if Path::new(&file_name).exists() {
+            return Err(Error::KeyStore(format!(
+                "account name {} alreay exist",
+                name
+            )));
+        }
+        Ok(true)
+    }
+
     fn save_to_file(&self, name: &str, key: &KeyFile) -> Result<()> {
-        let file_name = format!("{}/{}.json", self.keys_dir_path, name);
+        let file_name = self.filename(name);
         let mut file = File::create(file_name)
             .map_err(|e| Error::KeyStore(format!("keyfile {} create : {:?}", name, e)))?;
         key.write(&mut file)
@@ -106,7 +140,7 @@ impl KeyStore {
     }
 
     fn load_from_file(&self, name: &str) -> Result<KeyFile> {
-        let file_name = format!("{}/{}.json", self.keys_dir_path, name);
+        let file_name = self.filename(name);
         let file = File::open(file_name)
             .map_err(|e| Error::KeyStore(format!("keyfile {} open : {:?}", name, e)))?;
         let key = KeyFile::load(&file)
@@ -183,6 +217,7 @@ impl KeyStore {
 
         // key save
         let name = name.unwrap_or(&key.address);
+        self.should_not_exist(name)?;
         self.save_to_file(name, &key)?;
         Ok(name.to_string())
     }
@@ -217,6 +252,7 @@ impl KeyStore {
 
         // key save
         let name = name.unwrap_or(&key.address);
+        self.should_not_exist(name)?;
         self.save_to_file(name, &key)?;
         Ok(name.to_string())
     }
@@ -253,6 +289,7 @@ impl KeyStore {
     }
 
     pub fn export_address(&self, name: &str, password: Option<&str>) -> Result<Account> {
+        self.should_exist(name)?;
         let key = self.load_from_file(name)?;
         let curve_type = CryptoTypeId::try_from(key.curve.as_ref()).unwrap();
         match curve_type {
@@ -290,6 +327,7 @@ impl KeyStore {
     }
 
     pub fn sign_message(&self, name: &str, password: Option<&str>, msg: &str) -> Result<String> {
+        self.should_exist(name)?;
         let key = self.load_from_file(name)?;
         let curve_type = CryptoTypeId::try_from(key.curve.as_ref()).unwrap();
         match curve_type {
@@ -319,6 +357,7 @@ impl KeyStore {
     }
 
     pub fn verify_message(&self, name: &str, msg: &str, signature: &str) -> Result<bool> {
+        self.should_exist(name)?;
         let key = self.load_from_file(name)?;
         let curve_type = CryptoTypeId::try_from(key.curve.as_ref()).unwrap();
         match curve_type {
@@ -333,43 +372,132 @@ impl KeyStore {
             }
         }
     }
-}
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn get_new_address() {
-        let ks = KeyStore::new(None);
-        let ret = ks.get_new_address(None, None, None, None);
-        println!("===={:?}", ret);
-        assert!(ret.is_ok());
+    //==========================================================================================//
+    // account
+    //==========================================================================================//
+    // Returns all the account name & the transparent / shielded address
+    pub fn accounts(&self) -> Result<Vec<String>> {
+        let mut names = vec![];
+        let entrys = fs::read_dir(&self.keys_dir_path)
+            .map_err(|e| Error::KeyStore(format!("keystore accouts read_dir {:?}", e)))?;
+        for entry in entrys {
+            let file = entry.unwrap().path();
+            let filename = file.to_str().unwrap();
+            let path = Path::new(&filename);
+            if path.extension().unwrap().to_str().unwrap() == "json" {
+                let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+                let ret = self.load_from_file(&name);
+                if let Ok(_) = ret {
+                    names.push(name);
+                } else {
+                    println!("{:?}", ret);
+                }
+            }
+        }
+        Ok(names)
+    }
+    // Returns the transparent / shielded address by the account name
+    pub fn get_account_address(&self, name: &str) -> Result<String> {
+        self.should_exist(name)?;
+        Ok(self.load_from_file(name)?.address)
+    }
+    // Returns the account name by the addr
+    pub fn get_account(&self, addr: &str) -> Result<String> {
+        let entrys = fs::read_dir(&self.keys_dir_path)
+            .map_err(|e| Error::KeyStore(format!("keystore accouts read_dir {:?}", e)))?;
+        for entry in entrys {
+            let file = entry.unwrap().path();
+            let filename = file.to_str().unwrap();
+            let path = Path::new(&filename);
+            if path.extension().unwrap() == "json" {
+                let name = path.file_stem().unwrap().to_str().unwrap().to_string();
+                let key = self.load_from_file(&name)?;
+                if key.address == addr {
+                    return Ok(name);
+                }
+            }
+        }
+        Err(Error::KeyStore(format!("not found")))
     }
 
-    #[test]
-    fn import_export() {
-        let ks = KeyStore::new(None);
-
-        let phrase = "romance bus jealous account when lunch crush clinic ugly text shrug waste";
-        let ret = ks.import_new_address(Some("sss"), None, None, None, phrase);
-        println!("===={:?}", ret);
-        assert!(ret.is_ok());
-
-        let ret = ks.export_address("sss", None);
-        println!("===={:?}", ret);
-        assert!(ret.is_ok());
+    pub fn remove_account(&self, name: &str, password: Option<&str>) -> Result<bool> {
+        self.export_address(name, password)?;
+        fs::remove_file(self.filename(name))
+            .map_err(|e| Error::KeyStore(format!("failed to remove account{:?}", e)))?;
+        Ok(true)
+    }
+    pub fn change_name(&self, name: &str, new_name: &str, password: Option<&str>) -> Result<bool> {
+        self.export_address(name, password)?;
+        fs::rename(self.filename(name), self.filename(new_name))
+            .map_err(|e| Error::KeyStore(format!("failed to change_name {:?}", e)))?;
+        Ok(true)
     }
 
-    #[test]
-    fn sign_verfiy() {
-        let ks = KeyStore::new(None);
+    pub fn key_change_password<T: Crypto>(
+        key: &KeyFile,
+        password: Option<&str>,
+        new_password: Option<&str>,
+    ) -> Result<KeyFile> {
+        let password = Password::from(password.unwrap_or("").to_string());
+        let new_password = Password::from(new_password.unwrap_or("").to_string());
+        let secret = key
+            .crypto
+            .decrypt(&password)
+            .map_err(|e| Error::KeyStore(format!("Invalid password : {}", e)))?;
 
-        let ret = ks.sign_message("sss", None, "message");
-        println!("===={:?}", ret);
-        assert!(ret.is_ok());
+        let crypto = JCrypto::encrypt(secret.as_slice(), &new_password)
+            .map_err(|e| Error::KeyStore(format!("Invalid encrypt : {:?}", e)))?;
 
-        let ret = ks.verify_message("sss", "message", &ret.unwrap());
-        println!("===={:?}", ret);
-        assert!(ret.is_ok());
+        let evfk = if let Some(crypto) = &key.efvk {
+            let password_efvk = Password::from("");
+            let secret_efvk = crypto
+                .decrypt(&password_efvk)
+                .map_err(|e| Error::KeyStore(format!("Invalid password : {}", e)))?;
+
+            let crypto_efvk = JCrypto::encrypt(secret_efvk.as_slice(), &password_efvk)
+                .map_err(|e| Error::KeyStore(format!("Invalid encrypt : {:?}", e)))?;
+            Some(crypto_efvk)
+        } else {
+            None
+        };
+
+        Ok(KeyFile {
+            id: key.id.clone(),
+            version: key.version.clone(),
+            address: key.address.clone(),
+            curve: key.curve.clone(),
+            crypto: crypto,
+            efvk: evfk,
+            meta: key.meta.clone(),
+        })
+    }
+
+    pub fn change_password(
+        &self,
+        name: &str,
+        password: Option<&str>,
+        new_password: Option<&str>,
+    ) -> Result<bool> {
+        self.should_exist(name)?;
+        let key = self.load_from_file(name)?;
+        let curve_type = CryptoTypeId::try_from(key.curve.as_ref()).unwrap();
+        let key = match curve_type {
+            ed25519::CRYPTO_ID => {
+                Self::key_change_password::<Ed25519>(&key, password, new_password)?
+            }
+            sr25519::CRYPTO_ID => {
+                Self::key_change_password::<Sr25519>(&key, password, new_password)?
+            }
+            ecdsa::CRYPTO_ID => Self::key_change_password::<Ecdsa>(&key, password, new_password)?,
+            _ => {
+                return Err(Error::KeyStore(format!(
+                    "Invalid curve type : {:?}",
+                    curve_type
+                )))
+            }
+        };
+        self.save_to_file(name, &key)?;
+        Ok(true)
     }
 }

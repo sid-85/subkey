@@ -36,3 +36,36 @@ pub struct VerfiyMessageParams {
     pub message: String,
     pub signature: String,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountAddressParams {
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountsParams {}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountParams {
+    pub addr: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountRemoveParams {
+    pub name: String,
+    pub password: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountNameChangeParams {
+    pub name: String,
+    pub new_name: String,
+    pub password: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountPasswordChangeParams {
+    pub name: String,
+    pub password: Option<String>,
+    pub new_password: Option<String>,
+}

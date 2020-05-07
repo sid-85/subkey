@@ -22,7 +22,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{fmt, str};
 
 /// Universaly unique identifier.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Uuid([u8; 16]);
 
 impl From<[u8; 16]> for Uuid {
