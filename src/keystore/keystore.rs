@@ -4,7 +4,9 @@ use super::json::Password;
 use super::json::Random;
 use super::json::Version;
 use super::keyfile::KeyFile;
+use bip39::{Language, Mnemonic, MnemonicType};
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use std::fs::File;
 use std::str;
 
@@ -80,7 +82,7 @@ pub struct Account {
     secret_seed: String,
     public_key: String,
     ss58_address: String,
-    name: String,
+    curve_type: String,
 }
 
 pub struct KeyStore {
@@ -94,15 +96,31 @@ impl KeyStore {
         }
     }
 
-    fn pair_to_key(
+    fn save_to_file(&self, name: &str, key: &KeyFile) -> Result<()> {
+        let file_name = format!("{}/{}.json", self.keys_dir_path, name);
+        let mut file = File::create(file_name)
+            .map_err(|e| Error::KeyStore(format!("keyfile {} create : {:?}", name, e)))?;
+        key.write(&mut file)
+            .map_err(|e| Error::KeyStore(format!("keyfile {} write : {:?}", name, e)))?;
+        Ok(())
+    }
+
+    fn load_from_file(&self, name: &str) -> Result<KeyFile> {
+        let file_name = format!("{}/{}.json", self.keys_dir_path, name);
+        let file = File::open(file_name)
+            .map_err(|e| Error::KeyStore(format!("keyfile {} open : {:?}", name, e)))?;
+        let key = KeyFile::load(&file)
+            .map_err(|e| Error::KeyStore(format!("keyfile {} load : {:?}", name, e)))?;
+        Ok(key)
+    }
+
+    fn phrase_to_key<T: Crypto>(
         phrase: &str,
         password: Option<&str>,
-        curve_type: Option<CryptoTypeId>,
+        curve_type: CryptoTypeId,
         address_format: Option<Ss58AddressFormat>,
     ) -> Result<KeyFile> {
-        let curve_type = curve_type.unwrap_or(ed25519::CRYPTO_ID);
-
-        let (pair, _seed) = <Ed25519 as Crypto>::Pair::from_phrase(phrase, None)
+        let (pair, _seed) = <T as Crypto>::Pair::from_phrase(phrase, None)
             .map_err(|e| Error::KeyStore(format!("Invalid phrase : {:?}", e)))?;
 
         let address_formt = address_format.unwrap_or_default();
@@ -133,23 +151,6 @@ impl KeyStore {
         };
         Ok(key)
     }
-    fn save_to_file(&self, name: &str, key: &KeyFile) -> Result<()> {
-        let file_name = format!("{}/{}.json", self.keys_dir_path, name);
-        let mut file = File::create(file_name)
-            .map_err(|e| Error::KeyStore(format!("keyfile {} create : {:?}", name, e)))?;
-        key.write(&mut file)
-            .map_err(|e| Error::KeyStore(format!("keyfile {} write : {:?}", name, e)))?;
-        Ok(())
-    }
-
-    fn load_from_file(&self, name: &str) -> Result<KeyFile> {
-        let file_name = format!("{}/{}.json", self.keys_dir_path, name);
-        let file = File::open(file_name)
-            .map_err(|e| Error::KeyStore(format!("keyfile {} open : {:?}", name, e)))?;
-        let key = KeyFile::load(&file)
-            .map_err(|e| Error::KeyStore(format!("keyfile {} load : {:?}", name, e)))?;
-        Ok(key)
-    }
 
     pub fn get_new_address(
         &self,
@@ -158,12 +159,29 @@ impl KeyStore {
         curve_type: Option<CryptoTypeId>,
         address_format: Option<Ss58AddressFormat>,
     ) -> Result<String> {
-        // generate random keypair
-        let (_pair, phrase, _seed) = <Ed25519 as Crypto>::Pair::generate_with_phrase(None);
+        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+        let phrase = mnemonic.phrase();
         // key
-        let key = Self::pair_to_key(&phrase, password, curve_type, address_format)?;
+        let curve_type = curve_type.unwrap_or(ed25519::CRYPTO_ID);
+        let key = match curve_type {
+            ed25519::CRYPTO_ID => {
+                Self::phrase_to_key::<Ed25519>(&phrase, password, curve_type, address_format)?
+            }
+            sr25519::CRYPTO_ID => {
+                Self::phrase_to_key::<Sr25519>(&phrase, password, curve_type, address_format)?
+            }
+            ecdsa::CRYPTO_ID => {
+                Self::phrase_to_key::<Ecdsa>(&phrase, password, curve_type, address_format)?
+            }
+            _ => {
+                return Err(Error::KeyStore(format!(
+                    "Invalid curve type : {:?}",
+                    curve_type
+                )))
+            }
+        };
 
-        // save
+        // key save
         let name = name.unwrap_or(&key.address);
         self.save_to_file(name, &key)?;
         Ok(name.to_string())
@@ -177,16 +195,33 @@ impl KeyStore {
         address_format: Option<Ss58AddressFormat>,
         phrase: &str,
     ) -> Result<String> {
-        let key = Self::pair_to_key(phrase, password, curve_type, address_format)?;
+        // key
+        let curve_type = curve_type.unwrap_or(ed25519::CRYPTO_ID);
+        let key = match curve_type {
+            ed25519::CRYPTO_ID => {
+                Self::phrase_to_key::<Ed25519>(&phrase, password, curve_type, address_format)?
+            }
+            sr25519::CRYPTO_ID => {
+                Self::phrase_to_key::<Sr25519>(&phrase, password, curve_type, address_format)?
+            }
+            ecdsa::CRYPTO_ID => {
+                Self::phrase_to_key::<Ecdsa>(&phrase, password, curve_type, address_format)?
+            }
+            _ => {
+                return Err(Error::KeyStore(format!(
+                    "Invalid curve type : {:?}",
+                    curve_type
+                )))
+            }
+        };
 
+        // key save
         let name = name.unwrap_or(&key.address);
         self.save_to_file(name, &key)?;
         Ok(name.to_string())
     }
 
-    pub fn export_address(&self, name: &str, password: Option<&str>) -> Result<Account> {
-        let key = self.load_from_file(name)?;
-
+    fn key_export<T: Crypto>(key: &KeyFile, password: Option<&str>) -> Result<Account> {
         let password = Password::from(password.unwrap_or("").to_string());
         let secret = key
             .crypto
@@ -196,11 +231,11 @@ impl KeyStore {
         let phrase = String::from_utf8(secret)
             .map_err(|e| Error::KeyStore(format!("Convert phrase : {}", e)))?;
 
-        let (_pair, seed) = <Ed25519 as Crypto>::Pair::from_phrase(&phrase, None)
+        let (_pair, seed) = <T as Crypto>::Pair::from_phrase(&phrase, None)
             .map_err(|e| Error::KeyStore(format!("Invalid phrase : {:?}", e)))?;
 
         let (pubkey, _format) =
-            <<Ed25519 as Crypto>::Pair as Pair>::Public::from_ss58check_with_version(&key.address)
+            <<T as Crypto>::Pair as Pair>::Public::from_ss58check_with_version(&key.address)
                 .map_err(|e| Error::KeyStore(format!("Convert pubkey : {:?}", e)))?;
 
         assert_eq!(
@@ -210,15 +245,30 @@ impl KeyStore {
 
         Ok(Account {
             secret_phrase: phrase.clone(),
-            secret_seed: format_seed::<Ed25519>(seed),
-            public_key: format_public_key::<Ed25519>(pubkey),
+            secret_seed: format_seed::<T>(seed),
+            public_key: format_public_key::<T>(pubkey),
             ss58_address: key.address.clone(),
-            name: name.to_string(),
+            curve_type: key.curve.clone(),
         })
     }
 
-    pub fn sign_message(&self, name: &str, password: Option<&str>, msg: &str) -> Result<String> {
+    pub fn export_address(&self, name: &str, password: Option<&str>) -> Result<Account> {
         let key = self.load_from_file(name)?;
+        let curve_type = CryptoTypeId::try_from(key.curve.as_ref()).unwrap();
+        match curve_type {
+            ed25519::CRYPTO_ID => Self::key_export::<Ed25519>(&key, password),
+            sr25519::CRYPTO_ID => Self::key_export::<Sr25519>(&key, password),
+            ecdsa::CRYPTO_ID => Self::key_export::<Ecdsa>(&key, password),
+            _ => {
+                return Err(Error::KeyStore(format!(
+                    "Invalid curve type : {:?}",
+                    curve_type
+                )))
+            }
+        }
+    }
+
+    fn key_sign<T: Crypto>(key: &KeyFile, password: Option<&str>, msg: &str) -> Result<String> {
         let password = Password::from(password.unwrap_or("").to_string());
         let secret = key
             .crypto
@@ -228,26 +278,60 @@ impl KeyStore {
         let phrase = String::from_utf8(secret)
             .map_err(|e| Error::KeyStore(format!("Convert phrase : {}", e)))?;
 
-        let (pair, _seed) = <Ed25519 as Crypto>::Pair::from_phrase(&phrase, None)
+        let (pair, _seed) = <T as Crypto>::Pair::from_phrase(&phrase, None)
             .map_err(|e| Error::KeyStore(format!("Invalid phrase : {:?}", e)))?;
 
         let signature = pair.sign(msg.as_bytes());
-        Ok(serde_json::to_string(&signature).unwrap())
+        Ok(serde_json::to_value(&signature)
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .to_string())
+    }
+
+    pub fn sign_message(&self, name: &str, password: Option<&str>, msg: &str) -> Result<String> {
+        let key = self.load_from_file(name)?;
+        let curve_type = CryptoTypeId::try_from(key.curve.as_ref()).unwrap();
+        match curve_type {
+            ed25519::CRYPTO_ID => Self::key_sign::<Ed25519>(&key, password, msg),
+            sr25519::CRYPTO_ID => Self::key_sign::<Sr25519>(&key, password, msg),
+            ecdsa::CRYPTO_ID => Self::key_sign::<Ecdsa>(&key, password, msg),
+            _ => {
+                return Err(Error::KeyStore(format!(
+                    "Invalid curve type : {:?}",
+                    curve_type
+                )))
+            }
+        }
+    }
+
+    fn key_verify<T: Crypto>(key: &KeyFile, msg: &str, signature: &str) -> Result<bool> {
+        let (pubkey, _format) =
+            <<T as Crypto>::Pair as Pair>::Public::from_ss58check_with_version(&key.address)
+                .map_err(|e| Error::KeyStore(format!("Convert pubkey : {:?}", e)))?;
+
+        let signature = serde_json::to_string(signature).unwrap();
+        let signature: <<T as Crypto>::Pair as Pair>::Signature = serde_json::from_str(&signature)
+            .map_err(|e| Error::KeyStore(format!("Invalid signature : {:?}", e)))?;
+
+        let ret = <<T as Crypto>::Pair as Pair>::verify(&signature, msg, &pubkey);
+        Ok(ret)
     }
 
     pub fn verify_message(&self, name: &str, msg: &str, signature: &str) -> Result<bool> {
         let key = self.load_from_file(name)?;
-
-        let (pubkey, _format) =
-            <<Ed25519 as Crypto>::Pair as Pair>::Public::from_ss58check_with_version(&key.address)
-                .map_err(|e| Error::KeyStore(format!("Convert pubkey : {:?}", e)))?;
-
-        let signature: <<Ed25519 as Crypto>::Pair as Pair>::Signature =
-            serde_json::from_str(signature)
-                .map_err(|e| Error::KeyStore(format!("Invalid signature : {:?}", e)))?;
-
-        let ret = <<Ed25519 as Crypto>::Pair as Pair>::verify(&signature, msg, &pubkey);
-        Ok(ret)
+        let curve_type = CryptoTypeId::try_from(key.curve.as_ref()).unwrap();
+        match curve_type {
+            ed25519::CRYPTO_ID => Self::key_verify::<Ed25519>(&key, msg, signature),
+            sr25519::CRYPTO_ID => Self::key_verify::<Sr25519>(&key, msg, signature),
+            ecdsa::CRYPTO_ID => Self::key_verify::<Ecdsa>(&key, msg, signature),
+            _ => {
+                return Err(Error::KeyStore(format!(
+                    "Invalid curve type : {:?}",
+                    curve_type
+                )))
+            }
+        }
     }
 }
 

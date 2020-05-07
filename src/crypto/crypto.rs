@@ -3,11 +3,11 @@ use hex;
 use parity_scale_codec::{Decode, Encode};
 use rand::{rngs::OsRng, RngCore};
 use regex::Regex;
-use zeroize::Zeroize;
-
+use serde::{de::DeserializeOwned, Serialize};
 use std::convert::{TryFrom, TryInto};
 use std::str;
 use std::sync::Mutex;
+use zeroize::Zeroize;
 
 use super::hexdisplay::HexDisplay;
 
@@ -222,7 +222,7 @@ pub trait Pair: CryptoType + Sized + Clone + Send + Sync + 'static {
 
     /// The type used to represent a signature. Can be created from a key pair and a message
     /// and verified with the message and a public key.
-    type Signature: AsRef<[u8]> + AsMut<[u8]> + Default;
+    type Signature: AsRef<[u8]> + AsMut<[u8]> + Default + Serialize + DeserializeOwned;
 
     /// Error returned from the `derive` function.
     type DeriveError;

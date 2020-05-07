@@ -49,7 +49,7 @@ fn add_new_address(matches: &ArgMatches) {
         address_format: addr_format.map(|x| String::from(x)),
     };
     let ret = rpcclient::RpcClient::new(url.to_string()).add_new_address(params);
-    println!("{:?}", ret);
+    println!("{}", ret.unwrap_or_else(|e| format!("{:?}", e)));
 }
 
 fn import_new_address(matches: &ArgMatches) {
@@ -79,7 +79,7 @@ fn import_new_address(matches: &ArgMatches) {
         address_format: addr_format.map(|x| String::from(x)),
     };
     let ret = rpcclient::RpcClient::new(url.to_string()).import_new_address(params);
-    println!("{:?}", ret);
+    println!("{}", ret.unwrap_or_else(|e| format!("{:?}", e)));
 }
 fn export_address(matches: &ArgMatches) {
     let url = format!("http://{}", matches.value_of("url").unwrap_or(ADDR));
@@ -91,7 +91,7 @@ fn export_address(matches: &ArgMatches) {
         password: password.map(|x| x.to_string()),
     };
     let ret = rpcclient::RpcClient::new(url.to_string()).export_address(params);
-    println!("{:?}", ret);
+    println!("{}", ret.unwrap_or_else(|e| format!("{:?}", e)));
 }
 fn sign_message(matches: &ArgMatches) {
     let url = format!("http://{}", matches.value_of("url").unwrap_or(ADDR));
@@ -105,7 +105,7 @@ fn sign_message(matches: &ArgMatches) {
         message: message.unwrap().to_string(),
     };
     let ret = rpcclient::RpcClient::new(url.to_string()).sign_message(params);
-    println!("{:?}", ret);
+    println!("{}", ret.unwrap_or_else(|e| format!("{:?}", e)));
 }
 fn verify_message(matches: &ArgMatches) {
     let url = format!("http://{}", matches.value_of("url").unwrap_or(ADDR));
@@ -119,5 +119,5 @@ fn verify_message(matches: &ArgMatches) {
         signature: signature.unwrap().to_string(),
     };
     let ret = rpcclient::RpcClient::new(url.to_string()).verify_message(params);
-    println!("{:?}", ret);
+    println!("{}", ret.unwrap_or_else(|e| format!("{:?}", e)));
 }
