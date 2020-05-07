@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fs;
 use std::fs::File;
+use std::fs::OpenOptions;
 use std::path::Path;
 use std::str;
 
@@ -111,10 +112,7 @@ impl KeyStore {
     fn should_exist(&self, name: &str) -> Result<bool> {
         let file_name = self.filename(name);
         if !Path::new(&file_name).exists() {
-            return Err(Error::KeyStore(format!(
-                "account name {} alreay exist",
-                name
-            )));
+            return Err(Error::KeyStore(format!("account name not exist")));
         }
         Ok(true)
     }
@@ -122,17 +120,18 @@ impl KeyStore {
     fn should_not_exist(&self, name: &str) -> Result<bool> {
         let file_name = self.filename(name);
         if Path::new(&file_name).exists() {
-            return Err(Error::KeyStore(format!(
-                "account name {} alreay exist",
-                name
-            )));
+            return Err(Error::KeyStore(format!("account name alreay exist")));
         }
         Ok(true)
     }
 
     fn save_to_file(&self, name: &str, key: &KeyFile) -> Result<()> {
         let file_name = self.filename(name);
-        let mut file = File::create(file_name)
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(file_name)
             .map_err(|e| Error::KeyStore(format!("keyfile {} create : {:?}", name, e)))?;
         key.write(&mut file)
             .map_err(|e| Error::KeyStore(format!("keyfile {} write : {:?}", name, e)))?;

@@ -181,10 +181,10 @@ subcommands:
             required: true
             takes_value: true
         - password:
+            long: password
             help: old password
-            required: true
             takes_value: true
         - new_password:
+            long: new_password
             help: new password
-            required: true
             takes_value: true
