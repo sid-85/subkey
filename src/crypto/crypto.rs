@@ -372,6 +372,16 @@ pub trait CryptoType {
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Encode, Decode)]
 pub struct CryptoTypeId(pub [u8; 4]);
 
+impl<'a> TryFrom<&'a str> for CryptoTypeId {
+    type Error = ();
+
+    fn try_from(x: &'a str) -> Result<CryptoTypeId, ()> {
+        let mut r = [0u8; 4];
+        r.copy_from_slice(x.as_bytes());
+        Ok(CryptoTypeId(r))
+    }
+}
+
 impl From<CryptoTypeId> for String {
     fn from(x: CryptoTypeId) -> String {
         match str::from_utf8(&x.0[..]) {
@@ -508,7 +518,7 @@ impl<T: Sized + AsMut<[u8]> + AsRef<[u8]> + Default + Derive> Ss58Codec for T {
 macro_rules! ss58_address_format {
 	( $( $identifier:tt => ($number:expr, $name:expr, $desc:tt) )* ) => (
 		/// A known address (sub)format/network ID for SS58.
-		#[derive(Copy, Clone, PartialEq, Eq)]
+		#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 		pub enum Ss58AddressFormat {
 			$(#[doc = $desc] $identifier),*,
 			/// Use a manually provided numeric value.

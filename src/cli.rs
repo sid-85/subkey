@@ -24,8 +24,7 @@ pub fn run_keys(args: &ArgMatches) {
 }
 
 fn add_new_address(matches: &ArgMatches) {
-    let url = matches.value_of("url").unwrap_or(ADDR);
-    let url = format!("http://{}", url);
+    let url = format!("http://{}", matches.value_of("url").unwrap_or(ADDR));
     let curve_type = if matches.is_present("sr25519") {
         Some(sr25519::CRYPTO_ID)
     } else if matches.is_present("secp256k1") {
@@ -54,7 +53,7 @@ fn add_new_address(matches: &ArgMatches) {
 }
 
 fn import_new_address(matches: &ArgMatches) {
-    let url = matches.value_of("url").unwrap_or(ADDR);
+    let url = format!("http://{}", matches.value_of("url").unwrap_or(ADDR));
     let curve_type = if matches.is_present("sr25519") {
         Some(sr25519::CRYPTO_ID)
     } else if matches.is_present("secp256k1") {
@@ -83,7 +82,7 @@ fn import_new_address(matches: &ArgMatches) {
     println!("{:?}", ret);
 }
 fn export_address(matches: &ArgMatches) {
-    let url = matches.value_of("url").unwrap_or(ADDR);
+    let url = format!("http://{}", matches.value_of("url").unwrap_or(ADDR));
     let name = matches.value_of("name");
     let password = matches.value_of("password");
 
@@ -95,7 +94,7 @@ fn export_address(matches: &ArgMatches) {
     println!("{:?}", ret);
 }
 fn sign_message(matches: &ArgMatches) {
-    let url = matches.value_of("url").unwrap_or(ADDR);
+    let url = format!("http://{}", matches.value_of("url").unwrap_or(ADDR));
     let name = matches.value_of("name");
     let password = matches.value_of("password");
     let message = matches.value_of("message");
@@ -109,10 +108,11 @@ fn sign_message(matches: &ArgMatches) {
     println!("{:?}", ret);
 }
 fn verify_message(matches: &ArgMatches) {
-    let url = matches.value_of("url").unwrap_or(ADDR);
+    let url = format!("http://{}", matches.value_of("url").unwrap_or(ADDR));
     let name = matches.value_of("name");
     let signature = matches.value_of("signature");
     let message = matches.value_of("message");
+
     let params = VerfiyMessageParams {
         name: name.unwrap().to_string(),
         message: message.unwrap().to_string(),

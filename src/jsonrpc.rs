@@ -1,8 +1,10 @@
 use jsonrpc_http_server::jsonrpc_core::{Error, IoHandler, Params};
 use jsonrpc_http_server::ServerBuilder;
 
+use super::crypto::crypto::{CryptoTypeId, Ss58AddressFormat};
 use super::keystore::KeyStore;
 use super::types::*;
+use std::convert::TryFrom;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -29,10 +31,18 @@ pub fn rpc_handler() -> IoHandler {
         let param: AddParams = params.parse()?;
         let name: Option<&str> = param.name.as_ref().map(String::as_str);
         let password: Option<&str> = param.password.as_ref().map(String::as_str);
+        let curve_type = param
+            .curve_type
+            .map(|x| CryptoTypeId::try_from(x.as_ref()).unwrap());
+
+        let addr_format = param
+            .address_format
+            .map(|x| Ss58AddressFormat::try_from(x.as_ref()).unwrap());
+
         let ret = &ks_add
             .read()
             .unwrap()
-            .get_new_address(name, password, None, None)
+            .get_new_address(name, password, curve_type, addr_format)
             .map_err(|e| Error::invalid_params_with_details("exec error", e))?;
         Ok(serde_json::json!(ret))
     });
@@ -42,10 +52,17 @@ pub fn rpc_handler() -> IoHandler {
         let param: ImportParams = params.parse()?;
         let name: Option<&str> = param.name.as_ref().map(String::as_str);
         let password: Option<&str> = param.password.as_ref().map(String::as_str);
+        let curve_type = param
+            .curve_type
+            .map(|x| CryptoTypeId::try_from(x.as_ref()).unwrap());
+
+        let addr_format = param
+            .address_format
+            .map(|x| Ss58AddressFormat::try_from(x.as_ref()).unwrap());
         let ret = &ks_import
             .read()
             .unwrap()
-            .import_new_address(name, password, None, None, &param.phrase)
+            .import_new_address(name, password, curve_type, addr_format, &param.phrase)
             .map_err(|e| Error::invalid_params_with_details("exec error", e))?;
         Ok(serde_json::json!(ret))
     });
